@@ -1,3 +1,4 @@
+pub mod event;
 pub mod guard {
     pub mod v1 {
         tonic::include_proto!("guard.v1");
@@ -7,6 +8,7 @@ pub mod guard {
 use std::{net::SocketAddr, time::Instant};
 
 use boundary_core::{Decision, DetectorFinding, FindingKind, GuardCore, GuardInput, PayloadKind, Redaction, Severity};
+use event::{noop_publisher, GuardEvent, SharedGuardEventPublisher};
 use guard::v1::guard_core_service_server::{GuardCoreService, GuardCoreServiceServer};
 use guard::v1::{
     CoreHealthCheckRequest, CoreHealthCheckResult, DecisionType, GuardCheckRequest, GuardCheckResult,
@@ -18,14 +20,31 @@ use tonic::{transport::Server, Request, Response, Status};
 pub const CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const DEFAULT_BIND_ADDR: &str = "127.0.0.1:50051";
 
-#[derive(Debug, Default)]
 pub struct BoundaryGuardService {
     core: GuardCore,
+    event_publisher: SharedGuardEventPublisher,
+}
+
+impl std::fmt::Debug for BoundaryGuardService {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("BoundaryGuardService")
+            .field("core", &self.core)
+            .field("event_publisher", &"SharedGuardEventPublisher")
+            .finish()
+    }
 }
 
 impl BoundaryGuardService {
     pub fn new(core: GuardCore) -> Self {
-        Self { core }
+        Self::with_event_publisher(core, noop_publisher())
+    }
+
+    pub fn with_event_publisher(core: GuardCore, event_publisher: SharedGuardEventPublisher) -> Self {
+        Self {
+            core,
+            event_publisher,
+        }
     }
 }
 
@@ -38,10 +57,12 @@ impl GuardCoreService for BoundaryGuardService {
         let started_at = Instant::now();
         let proto_request = request.into_inner();
         let input = guard_input_from_proto(&proto_request)?;
-        let output = self.core.check(input);
+        let output = self.core.check(input.clone());
         let core_latency_ms = started_at.elapsed().as_millis().min(u64::MAX as u128) as u64;
+        let result = guard_result_to_proto(output.clone(), core_latency_ms);
+        self.publish_guard_event_best_effort(input, output, core_latency_ms);
 
-        Ok(Response::new(guard_result_to_proto(output, core_latency_ms)))
+        Ok(Response::new(result))
     }
 
     async fn health(
@@ -61,6 +82,24 @@ impl GuardCoreService for BoundaryGuardService {
                 "secret".to_string(),
             ],
         }))
+    }
+}
+
+impl BoundaryGuardService {
+    fn publish_guard_event_best_effort(
+        &self,
+        input: GuardInput,
+        output: boundary_core::GuardOutput,
+        core_latency_ms: u64,
+    ) {
+        let event = GuardEvent::from_check(&input, &output, core_latency_ms);
+        let publisher = self.event_publisher.clone();
+
+        tokio::spawn(async move {
+            if let Err(error) = publisher.publish(event).await {
+                tracing::warn!(error = %error, "failed to publish guard event");
+            }
+        });
     }
 }
 
@@ -163,7 +202,15 @@ fn redaction_to_proto(redaction: Redaction) -> RedactionResult {
 }
 
 pub async fn run_server(bind_addr: SocketAddr, core: GuardCore) -> Result<(), Box<dyn std::error::Error>> {
-    let service = BoundaryGuardService::new(core);
+    run_server_with_event_publisher(bind_addr, core, noop_publisher()).await
+}
+
+pub async fn run_server_with_event_publisher(
+    bind_addr: SocketAddr,
+    core: GuardCore,
+    event_publisher: SharedGuardEventPublisher,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let service = BoundaryGuardService::with_event_publisher(core, event_publisher);
 
     Server::builder()
         .add_service(GuardCoreServiceServer::new(service))
