@@ -4,23 +4,29 @@
     <meta charset="utf-8">
     <title>AI Boundary Guard Monitoring</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; background: #f8fafc; color: #0f172a; }
-        header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
-        .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin: 1.5rem 0; }
-        .card { background: white; border: 1px solid #e2e8f0; border-radius: 0.75rem; padding: 1rem; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06); }
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: clamp(1rem, 4vw, 2rem); background: #f8fafc; color: #0f172a; overflow-x: hidden; }
+        header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+        .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+        .card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06); }
         .card strong { display: block; font-size: 1.75rem; margin-top: 0.25rem; }
-        table { width: 100%; border-collapse: collapse; background: white; border-radius: 0.75rem; overflow: hidden; }
-        th, td { padding: 0.75rem; border-bottom: 1px solid #e2e8f0; text-align: left; font-size: 0.92rem; }
+        .table-scroll { width: 100%; overflow-x: auto; background: white; border: 1px solid #e2e8f0; border-radius: 8px; }
+        table { width: 100%; min-width: 54rem; border-collapse: collapse; }
+        th, td { padding: 0.75rem; border-bottom: 1px solid #e2e8f0; text-align: left; font-size: 0.92rem; vertical-align: top; }
         th { background: #f1f5f9; color: #334155; }
         .badge { display: inline-block; padding: 0.18rem 0.5rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; }
         .decision-BLOCK, .severity-CRITICAL { background: #fee2e2; color: #991b1b; }
         .decision-REDACT, .severity-HIGH { background: #ffedd5; color: #9a3412; }
         .decision-ALLOW, .severity-LOW { background: #dcfce7; color: #166534; }
         .severity-MEDIUM { background: #fef9c3; color: #854d0e; }
-        .alert { background: #fff7ed; border: 1px solid #fdba74; border-radius: 0.75rem; padding: 1rem; margin: 1rem 0; display: none; }
+        .alert { background: #fff7ed; border: 1px solid #fdba74; border-radius: 8px; padding: 1rem; margin: 1rem 0; display: none; }
         .muted { color: #64748b; }
         a { color: #2563eb; text-decoration: none; }
         a:hover { text-decoration: underline; }
+        @media (max-width: 640px) {
+            h1 { font-size: 1.9rem; line-height: 1.15; }
+            .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
     </style>
 </head>
 <body>
@@ -38,14 +44,15 @@
 </section>
 
 <section class="cards">
-    <div class="card">Recent events<strong th:text="${dashboard.totalCount}">0</strong></div>
-    <div class="card">Blocked<strong th:text="${dashboard.blockCount}">0</strong></div>
-    <div class="card">Redacted<strong th:text="${dashboard.redactCount}">0</strong></div>
-    <div class="card">High risk<strong th:text="${dashboard.highRiskCount}">0</strong></div>
+    <div class="card">Recent events<strong id="totalCount" th:text="${dashboard.totalCount}">0</strong></div>
+    <div class="card">Blocked<strong id="blockCount" th:text="${dashboard.blockCount}">0</strong></div>
+    <div class="card">Redacted<strong id="redactCount" th:text="${dashboard.redactCount}">0</strong></div>
+    <div class="card">High risk<strong id="highRiskCount" th:text="${dashboard.highRiskCount}">0</strong></div>
 </section>
 
 <section>
     <h2>Recent Guard Events</h2>
+    <div class="table-scroll">
     <table>
         <thead>
         <tr>
@@ -59,8 +66,8 @@
             <th>Detail</th>
         </tr>
         </thead>
-        <tbody>
-        <tr th:if="${dashboard.recentEvents.isEmpty()}">
+        <tbody id="recentEventsBody">
+        <tr id="emptyEventsRow" th:if="${dashboard.recentEvents.isEmpty()}">
             <td colspan="8" class="muted">아직 표시할 이벤트가 없습니다.</td>
         </tr>
         <tr th:each="event : ${dashboard.recentEvents}">
@@ -75,6 +82,7 @@
         </tr>
         </tbody>
     </table>
+    </div>
 </section>
 
 <section>
@@ -88,6 +96,55 @@
 
 <script>
     if (window.EventSource) {
+        const counts = {
+            total: document.getElementById('totalCount'),
+            block: document.getElementById('blockCount'),
+            redact: document.getElementById('redactCount'),
+            highRisk: document.getElementById('highRiskCount'),
+        };
+
+        const increment = (element) => {
+            element.textContent = String(Number(element.textContent || '0') + 1);
+        };
+
+        const cell = (text) => {
+            const td = document.createElement('td');
+            td.textContent = text;
+            return td;
+        };
+
+        const badgeCell = (value, prefix) => {
+            const td = document.createElement('td');
+            const badge = document.createElement('span');
+            badge.className = `badge ${prefix}-${value}`;
+            badge.textContent = value;
+            td.appendChild(badge);
+            return td;
+        };
+
+        const prependEventRow = (event) => {
+            const body = document.getElementById('recentEventsBody');
+            document.getElementById('emptyEventsRow')?.remove();
+
+            const row = document.createElement('tr');
+            row.appendChild(cell(event.occurredAt));
+            row.appendChild(cell(event.requestId));
+            row.appendChild(badgeCell(event.decision, 'decision'));
+            row.appendChild(cell(event.riskScore));
+            row.appendChild(badgeCell(event.severity, 'severity'));
+            row.appendChild(cell(event.payloadType));
+            row.appendChild(cell(event.redactedSummary || 'No payload content stored'));
+
+            const detail = document.createElement('td');
+            const link = document.createElement('a');
+            link.href = `/monitoring/events/${encodeURIComponent(event.eventId)}`;
+            link.textContent = '보기';
+            detail.appendChild(link);
+            row.appendChild(detail);
+
+            body.prepend(row);
+        };
+
         const source = new EventSource('/monitoring/events/stream');
         source.addEventListener('guard-event', (message) => {
             const event = JSON.parse(message.data);
@@ -95,6 +152,17 @@
             const body = document.getElementById('highRiskAlertBody');
             body.textContent = `${event.occurredAt} request=${event.requestId} decision=${event.decision} risk=${event.riskScore} severity=${event.severity}`;
             alert.style.display = 'block';
+            increment(counts.total);
+            if (event.decision === 'BLOCK') {
+                increment(counts.block);
+            }
+            if (event.decision === 'REDACT') {
+                increment(counts.redact);
+            }
+            if (event.riskScore >= 80) {
+                increment(counts.highRisk);
+            }
+            prependEventRow(event);
         });
     }
 </script>

@@ -4,17 +4,24 @@
     <meta charset="utf-8">
     <title>Guard Event Detail</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; background: #f8fafc; color: #0f172a; }
-        .panel { background: white; border: 1px solid #e2e8f0; border-radius: 0.75rem; padding: 1rem; margin: 1rem 0; }
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: clamp(1rem, 4vw, 2rem); background: #f8fafc; color: #0f172a; overflow-x: hidden; }
+        .panel { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
         dl { display: grid; grid-template-columns: 12rem 1fr; gap: 0.5rem 1rem; }
         dt { color: #64748b; }
         dd { margin: 0; word-break: break-word; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.7rem; border-bottom: 1px solid #e2e8f0; text-align: left; }
+        .table-scroll { width: 100%; overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+        table { width: 100%; min-width: 54rem; border-collapse: collapse; }
+        th, td { padding: 0.7rem; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: top; }
         th { background: #f1f5f9; }
-        .notice { background: #ecfeff; border: 1px solid #67e8f9; border-radius: 0.75rem; padding: 1rem; }
+        .notice { background: #ecfeff; border: 1px solid #67e8f9; border-radius: 8px; padding: 1rem; }
         a { color: #2563eb; text-decoration: none; }
         a:hover { text-decoration: underline; }
+        @media (max-width: 640px) {
+            h1 { font-size: 1.9rem; line-height: 1.15; }
+            dl { grid-template-columns: minmax(0, 1fr); }
+            dt { font-weight: 700; }
+        }
     </style>
 </head>
 <body>
@@ -64,6 +71,7 @@
 
 <section class="panel">
     <h2>Violations</h2>
+    <div class="table-scroll">
     <table>
         <thead>
         <tr>
@@ -89,6 +97,7 @@
         </tr>
         </tbody>
     </table>
+    </div>
 </section>
 </body>
 </html>
