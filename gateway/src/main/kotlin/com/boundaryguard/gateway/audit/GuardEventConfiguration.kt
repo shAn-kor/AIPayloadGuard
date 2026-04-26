@@ -1,5 +1,6 @@
 package com.boundaryguard.gateway.audit
 
+import com.boundaryguard.gateway.monitoring.GuardEventSseBroadcaster
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.time.Clock
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -22,7 +23,8 @@ class GuardEventConfiguration {
     fun guardEventSink(
         jsonlGuardEventSink: JsonlGuardEventSink,
         recentGuardEventBuffer: InMemoryRecentGuardEventBuffer,
+        guardEventSseBroadcaster: GuardEventSseBroadcaster,
     ): GuardEventSink = CompositeGuardEventSink(
-        listOf(jsonlGuardEventSink, recentGuardEventBuffer),
+        listOf(jsonlGuardEventSink, recentGuardEventBuffer, guardEventSseBroadcaster),
     )
 }
