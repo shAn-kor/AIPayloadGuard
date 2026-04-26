@@ -9,6 +9,7 @@ import com.boundaryguard.contract.guard.v1.Severity
 import com.boundaryguard.contract.guard.v1.ViolationEvidence
 import com.boundaryguard.contract.guard.v1.ViolationType
 import com.boundaryguard.gateway.application.GuardCheckApplicationService
+import com.boundaryguard.gateway.application.GuardCheckProtoMapper
 import com.boundaryguard.gateway.coreclient.RustCoreClient
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -108,7 +109,7 @@ class GuardCheckControllerTests @Autowired constructor(
     class TestConfiguration {
         @Bean
         fun guardCheckApplicationService(rustCoreClient: RustCoreClient): GuardCheckApplicationService =
-            GuardCheckApplicationService(rustCoreClient)
+            GuardCheckApplicationService(rustCoreClient, GuardCheckProtoMapper())
 
         @Bean
         fun rustCoreClient(): RustCoreClient = FakeRustCoreClient()
