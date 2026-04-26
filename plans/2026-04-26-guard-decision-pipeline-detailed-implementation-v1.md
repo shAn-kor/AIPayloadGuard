@@ -823,33 +823,214 @@ MVP 본체를 실행 가능한 상태로 고정한다.
 
 ### Worktree
 
-`../uai-bg-rust-runtime-plan`
+`../uai-bg-runtime-plan`
 
 ### Goal
 
 Spring이 runtime 검사 병목이 되지 않도록, 장기 운영 모드에서 `Client / LLM App → Rust Guard Runtime → Decision` 경로와 `Rust Guard Runtime → Spring Monitoring/Admin → SSE Dashboard` 경로를 분리하는 상세 계획을 작성한다.
 
-### Planning Decisions
+### Target Architecture
 
-- Rust runtime direct path는 MVP hardening 이후 시작한다.
-- Spring `/guard/check`는 compatibility/debug/admin path로 유지하거나 후순위에서 축소한다.
-- Rust runtime이 GuardEvent를 비동기로 발행하고, Spring은 event collector/monitoring 역할을 담당한다.
-- 기본 event delivery는 JSONL/log tail 또는 HTTP event collector로 시작하고, gRPC streaming/broker는 확장 옵션으로 둔다.
-- Runtime path는 Spring/SSE/dashboard 장애와 독립적으로 decision을 반환해야 한다.
+```text
+[Runtime Path]
+Client / LLM App
+  ↓
+Rust Guard Runtime
+  ↓
+Decision: ALLOW / REDACT / BLOCK
+  ↓
+Client / LLM App continues provider call or blocks
+
+[Monitoring Path]
+Rust Guard Runtime
+  ↓ async GuardEvent
+Spring Monitoring/Admin
+  ↓ JSONL tail / HTTP collector / optional stream backend
+In-memory recent event buffer
+  ↓ SSE
+Browser Dashboard
+```
+
+### Non-Negotiable Runtime Rules
+
+- Rust runtime direct path must not depend on Spring request handling latency.
+- Rust runtime direct path must not wait for Spring dashboard, SSE subscriber, or optional persistence success before returning a decision.
+- Spring `/guard/check` remains compatibility/debug/admin path, not the primary high-performance runtime path.
+- Spring owns monitoring/admin UX; Rust owns runtime inspection, decision generation, and runtime-safe event emission.
+- GuardEvent must not contain raw payload content.
+- GuardEvent must contain only content hash, redacted summary, policy/violation evidence, risk score, decision, and timing metadata.
+- Same-hardware deployment must work without PostgreSQL, Redis, Kafka, or NATS.
+
+### Deployment Modes
+
+#### Mode A. Same Hardware Lite Mode
+
+Default near-term target.
+
+```text
+Rust Guard Runtime
+  ├─ public check endpoint
+  └─ append-only JSONL GuardEvent log
+        ↓
+Spring Monitoring/Admin
+  └─ local log tailer
+        ↓
+     in-memory recent buffer
+        ↓
+     SSE dashboard
+```
+
+Properties:
+
+- Lowest operational overhead.
+- No external database required.
+- Suitable for single-node developer/edge/internal gateway deployment.
+- Event delivery is eventually visible in Spring UI.
+- Rust decision path is independent from Spring availability.
+
+#### Mode B. Same Hardware HTTP Collector Mode
+
+Optional if immediate Spring notification is preferred.
+
+```text
+Rust Guard Runtime
+  ├─ public check endpoint
+  └─ async HTTP POST GuardEvent
+        ↓
+Spring Event Collector
+  └─ in-memory recent buffer + JSONL sink + SSE
+```
+
+Properties:
+
+- Faster UI update than log tailing.
+- Still must be asynchronous and best-effort.
+- Failed delivery must not fail the decision.
+- Rust should retain local JSONL fallback.
+
+#### Mode C. Distributed Stream Mode
+
+Future production option.
+
+```text
+Rust Guard Runtime
+  ↓
+Redis Streams / NATS JetStream / Kafka / OTel Logs
+  ↓
+Spring Monitoring/Admin
+  ↓
+SSE dashboard
+```
+
+Properties:
+
+- Useful for multiple Rust runtime instances.
+- Better replay/consumer group behavior.
+- Not required for MVP.
+
+### Public Runtime API Decision
+
+Stage 10 starts with Rust gRPC public endpoint first because the proto contract already exists and both Kotlin/Rust codegen are in place.
+
+Initial endpoint:
+
+```text
+guard.v1.GuardCoreService.Check
+```
+
+HTTP proxy/provider relay is intentionally deferred.
+
+Reason:
+
+- The core product contract is `GuardCheckRequest → GuardCheckResult`.
+- Adding provider relay too early expands scope into LLM gateway/proxy orchestration.
+- Existing clients can call Rust gRPC directly for high-performance inspection.
+- Spring compatibility path can remain for admin/debug and simple integration.
+
+### Event Delivery Decision
+
+Stage 10 implements event publisher interface in Rust, but only the default JSONL publisher is required.
+
+Required Stage 10 event publisher implementations:
+
+- `NoopGuardEventPublisher`
+- `JsonlGuardEventPublisher`
+
+Deferred implementations:
+
+- HTTP collector publisher
+- gRPC streaming publisher
+- Redis/NATS/Kafka publisher
+- OTel/Loki exporter
+
+### Spring Monitoring Adjustment
+
+Spring monitoring should evolve from in-process event recording to event collector/reader modes.
+
+Stage 10 minimum Spring changes:
+
+- Keep current in-memory recent buffer and SSE dashboard.
+- Add a clear contract that Spring is monitoring-only for runtime direct path.
+- Do not require RDB.
+
+Deferred Spring changes:
+
+- Local JSONL tailer.
+- HTTP event collector endpoint.
+- Runtime instance registry.
+- Multi-runtime event aggregation.
 
 ### Tasks
 
-- [ ] Rust direct `/guard/check` 또는 gRPC public endpoint shape를 정의한다.
-- [ ] Rust runtime event publishing interface를 설계한다.
-- [ ] Spring event collector API 또는 log tailer 선택 기준을 정의한다.
-- [ ] 기존 Kotlin `/guard/check`의 역할을 compatibility/debug/admin path로 재정의한다.
-- [ ] Rust runtime path에서 GuardEvent 원문 미저장 원칙을 다시 검증한다.
-- [ ] 운영 배포 형태를 같은 하드웨어 기준과 분리 하드웨어 기준으로 나눈다.
-- [ ] Stage 10 구현 범위를 확정한다.
+- [x] Confirm MVP hardening is merged before planning runtime direct path.
+- [x] Define Rust direct public endpoint as gRPC `GuardCoreService.Check` first.
+- [x] Define Spring `/guard/check` as compatibility/debug/admin path.
+- [x] Define same-hardware lite mode with Rust JSONL event log + Spring monitoring.
+- [x] Define optional HTTP collector mode.
+- [x] Define future distributed stream mode.
+- [x] Define GuardEvent raw payload exclusion rule for runtime direct path.
+- [x] Define Stage 10 implementation scope.
+
+### Stage 10 Implementation Scope
+
+Stage 10 must implement only the smallest Rust runtime direct path:
+
+- [ ] Add `GuardEvent` model in Rust runtime/service layer.
+- [ ] Add Rust event publisher trait.
+- [ ] Add `NoopGuardEventPublisher`.
+- [ ] Add `JsonlGuardEventPublisher`.
+- [ ] Emit GuardEvent asynchronously or best-effort after `Check` decision is produced.
+- [ ] Ensure event publishing failure does not change `Check` response.
+- [ ] Add Rust service tests for decision independence from event publisher failure.
+- [ ] Add Rust integration test that writes JSONL event without raw payload.
+- [ ] Keep Spring `/guard/check` unchanged except documentation/plan role clarification.
+- [ ] Keep provider relay/proxy out of Stage 10.
+
+### Out of Scope for Stage 10
+
+- [ ] Rust HTTP provider proxy.
+- [ ] Actual OpenAI/Anthropic/Gemini relay.
+- [ ] Spring JSONL tailer.
+- [ ] Spring HTTP event collector.
+- [ ] Distributed broker integration.
+- [ ] RDB persistence.
+- [ ] File/archive guard.
+- [ ] Action review module.
+
+### Verification
+
+- [ ] Rust `cargo test` passes.
+- [ ] Kotlin `./gradlew test integrationTest` passes.
+- [ ] Rust `Check` response is returned even when event publisher fails.
+- [ ] Rust JSONL GuardEvent does not contain raw payload.
+- [ ] Spring compatibility `/guard/check` remains functional.
+- [ ] Existing SSE dashboard remains functional for Spring-originated events.
 
 ### Merge Gate
 
 - Stage 10 구현 전 `main`에 merge한다.
+- Runtime direct path implementation must preserve existing MVP behavior.
+- Any new event publisher must be best-effort or asynchronous relative to decision response.
 
 ---
 
