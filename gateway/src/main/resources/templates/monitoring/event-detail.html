@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <title>Guard Event Detail</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; background: #f8fafc; color: #0f172a; }
+        .panel { background: white; border: 1px solid #e2e8f0; border-radius: 0.75rem; padding: 1rem; margin: 1rem 0; }
+        dl { display: grid; grid-template-columns: 12rem 1fr; gap: 0.5rem 1rem; }
+        dt { color: #64748b; }
+        dd { margin: 0; word-break: break-word; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.7rem; border-bottom: 1px solid #e2e8f0; text-align: left; }
+        th { background: #f1f5f9; }
+        .notice { background: #ecfeff; border: 1px solid #67e8f9; border-radius: 0.75rem; padding: 1rem; }
+        a { color: #2563eb; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+<a href="/monitoring">← Dashboard</a>
+<h1>Guard Event Detail</h1>
+
+<div class="notice">
+    원문 payload는 저장하거나 표시하지 않습니다. 화면에는 redacted summary, content hash, violation evidence만 표시됩니다.
+</div>
+
+<section class="panel">
+    <h2>Summary</h2>
+    <dl>
+        <dt>Event ID</dt><dd th:text="${event.eventId}">event</dd>
+        <dt>Request ID</dt><dd th:text="${event.requestId}">request</dd>
+        <dt>Occurred At</dt><dd th:text="${event.occurredAt}">time</dd>
+        <dt>Decision</dt><dd th:text="${event.decision}">BLOCK</dd>
+        <dt>Risk Score</dt><dd th:text="${event.riskScore}">0</dd>
+        <dt>Severity</dt><dd th:text="${event.severity}">HIGH</dd>
+        <dt>Payload Type</dt><dd th:text="${event.payloadType}">PROMPT</dd>
+        <dt>Policy Revision</dt><dd th:text="${event.policyRevision}">builtin-mvp</dd>
+        <dt>Core Latency</dt><dd th:text="${event.coreLatencyMs + 'ms'}">0ms</dd>
+    </dl>
+</section>
+
+<section class="panel">
+    <h2>Safe Payload Evidence</h2>
+    <dl>
+        <dt>Content Hash</dt><dd th:text="${event.contentHash}">hash</dd>
+        <dt>Redacted Summary</dt><dd th:text="${event.redactedSummary ?: 'No redacted summary'}">summary</dd>
+        <dt>Redaction Count</dt><dd th:text="${event.redactionCount}">0</dd>
+    </dl>
+</section>
+
+<section class="panel">
+    <h2>Provider / Principal</h2>
+    <dl>
+        <dt>Provider Type</dt><dd th:text="${event.providerType ?: '-'}">-</dd>
+        <dt>Provider Name</dt><dd th:text="${event.providerName ?: '-'}">-</dd>
+        <dt>Model</dt><dd th:text="${event.model ?: '-'}">-</dd>
+        <dt>Principal ID</dt><dd th:text="${event.principalId ?: '-'}">-</dd>
+        <dt>Tenant ID</dt><dd th:text="${event.tenantId ?: '-'}">-</dd>
+        <dt>Project ID</dt><dd th:text="${event.projectId ?: '-'}">-</dd>
+        <dt>Environment</dt><dd th:text="${event.environment ?: '-'}">-</dd>
+    </dl>
+</section>
+
+<section class="panel">
+    <h2>Violations</h2>
+    <table>
+        <thead>
+        <tr>
+            <th>Policy</th>
+            <th>Type</th>
+            <th>Severity</th>
+            <th>Detector</th>
+            <th>Offset</th>
+            <th>Message</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:if="${event.violations.isEmpty()}">
+            <td colspan="6">No violations</td>
+        </tr>
+        <tr th:each="violation : ${event.violations}">
+            <td th:text="${violation.policyId}">policy</td>
+            <td th:text="${violation.violationType}">type</td>
+            <td th:text="${violation.severity}">severity</td>
+            <td th:text="${violation.detector}">detector</td>
+            <td th:text="${violation.startOffset + '-' + violation.endOffset}">0-0</td>
+            <td th:text="${violation.message}">message</td>
+        </tr>
+        </tbody>
+    </table>
+</section>
+</body>
+</html>
