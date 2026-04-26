@@ -256,21 +256,21 @@ MVP contract는 본체에 필요한 필드만 활성화한다.
 
 ### Tasks
 
-- [ ] `proto/guard/v1/guard.proto`를 작성한다.
-- [ ] `DecisionType`을 `ALLOW`, `REDACT`, `BLOCK` 중심으로 정의한다.
-- [ ] `REVIEW`, `QUARANTINE`은 reserved comment 또는 extension enum 후보로만 둔다.
-- [ ] `PayloadType` MVP 값을 `TEXT`, `PROMPT`, `RESPONSE`, `DATA_EGRESS`로 정의한다.
-- [ ] `ProviderType` MVP 값을 `ANTHROPIC`, `OPENAI_COMPATIBLE`, `GOOGLE`, `INTERNAL`로 정의한다.
-- [ ] `PrincipalContext`를 정의한다.
-- [ ] `ProviderMetadata`를 정의한다.
-- [ ] `ViolationEvidence`를 정의한다.
-- [ ] `RedactionResult`를 정의한다.
-- [ ] `GuardCheckRequest`를 정의한다.
-- [ ] `GuardCheckResult`를 정의한다.
-- [ ] `CoreHealthCheckRequest`와 `CoreHealthCheckResult`를 정의한다.
-- [ ] `GuardCoreService.Check` RPC를 정의한다.
-- [ ] `GuardCoreService.Health` RPC를 정의한다.
-- [ ] policy sync RPC는 MVP에서 제외하거나 별도 proto placeholder로만 둔다.
+- [x] `proto/guard/v1/guard.proto`를 작성한다.
+- [x] `DecisionType`을 `ALLOW`, `REDACT`, `BLOCK` 중심으로 정의한다.
+- [x] `REVIEW`, `QUARANTINE`은 reserved comment 또는 extension enum 후보로만 둔다.
+- [x] `PayloadType` MVP 값을 `TEXT`, `PROMPT`, `RESPONSE`, `DATA_EGRESS`로 정의한다.
+- [x] `ProviderType` MVP 값을 `ANTHROPIC`, `OPENAI_COMPATIBLE`, `GOOGLE`, `INTERNAL`로 정의한다.
+- [x] `PrincipalContext`를 정의한다.
+- [x] `ProviderMetadata`를 정의한다.
+- [x] `ViolationEvidence`를 정의한다.
+- [x] `RedactionResult`를 정의한다.
+- [x] `GuardCheckRequest`를 정의한다.
+- [x] `GuardCheckResult`를 정의한다.
+- [x] `CoreHealthCheckRequest`와 `CoreHealthCheckResult`를 정의한다.
+- [x] `GuardCoreService.Check` RPC를 정의한다.
+- [x] `GuardCoreService.Health` RPC를 정의한다.
+- [x] policy sync RPC는 MVP에서 제외하거나 별도 proto placeholder로만 둔다.
 
 ### Contract Draft Shape
 
@@ -295,10 +295,10 @@ GuardCheckResult
 
 ### Verification
 
-- [ ] protobuf compile 또는 Buf lint 중 하나가 가능하다.
-- [ ] Kotlin/Rust codegen 위치가 결정되어 있다.
-- [ ] contract에 원문 audit 저장 필드가 없다.
-- [ ] context/action/file 관련 필드는 MVP contract에서 제외되어 있다.
+- [x] protobuf compile 또는 Buf lint 중 하나가 가능하다.
+- [x] Kotlin/Rust codegen 위치가 결정되어 있다.
+- [x] contract에 원문 audit 저장 필드가 없다.
+- [x] context/action/file 관련 필드는 MVP contract에서 제외되어 있다.
 
 ### Merge Gate
 
