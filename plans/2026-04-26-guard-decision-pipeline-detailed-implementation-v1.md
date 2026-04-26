@@ -4,33 +4,37 @@
 
 이 문서는 상위 계획 `plans/2026-04-26-universal-ai-boundary-guard-implementation-v1.md`의 최신 구조에 맞춰, 실제 구현 순서와 브랜치/worktree 전략을 정의한다.
 
-최신 제품 구조는 3계층이다.
+최신 제품 구조는 **비전 기준 3계층**이며, 현재 소스코드 SSOT는 이 중 Rust runtime slice만 구현되어 있다.
 
 1. **MVP Runtime Path**: Rust Guard Core/Service가 text payload를 검사하고 `ALLOW`, `REDACT`, `BLOCK` 결정을 생성한다.
 2. **Monitoring/Admin Path**: Spring Gateway/Admin이 GuardEvent를 원문 없이 저장하고 로그 기반 모니터링과 SSE 대시보드를 제공한다.
 3. **확장 모듈/검증 도구**: Permission-aware Context Filter, High-Risk Action Review, Regression / Eval Pack.
 
-MVP 본체는 **Provider-agnostic AI Guard Gateway**이며, text payload 기반 `/guard/check` API를 통해 `ALLOW`, `REDACT`, `BLOCK` 결정을 반환한다. 운영 관점에서는 동일 결과를 `GuardEvent`로 기록하고, Spring은 검사 병목이 아니라 **로그·감사·모니터링·SSE 알림 계층**으로 동작한다.
+현재 SSOT 기준 구현 완료 범위는 **Rust Guard Core + Rust gRPC Guard Service**다. 운영 관점의 Gateway, GuardEvent 저장, SSE 대시보드는 상위 구조에는 포함되지만, 이 문서에서는 현재 소스코드로 검증된 구현과 계획 상태를 구분해서 다룬다.
 
 ## Current Baseline
 
 - Current main baseline: `3d8bcac merge: sse guard event dashboard`
-- Completed scaffold branch: `chore/monorepo-scaffold`
-- Completed contract branch: `contract/guard-check-v1`
-- Completed Rust core/service branches: `core/rust-guard-pipeline`, `service/rust-core-grpc`
-- Completed Kotlin Gateway branches: `gateway/rust-core-client`, `gateway/guard-check-api`
-- Completed monitoring branches: `audit/log-event-sink`, `monitoring/sse-dashboard`
+- SSOT verified implementation scope: `rust/boundary-core`, `rust/boundary-core-service`
+- Verified runtime behavior: text payload normalize / detect / score / redact / decide + gRPC `check`
+- Planned but not SSOT-verified in this document: Kotlin Gateway, provider-aware policy wiring, GuardEvent sink, SSE dashboard, audit/monitoring UI
 
 ## Scope Alignment With Updated High-Level Plan
 
-### Keep In MVP Body
+### Current SSOT-Verified MVP Slice
+
+- Rust Guard Core
+- Rust gRPC Guard Service
+- text payload normalize / detect / score / decide
+- `ALLOW`, `REDACT`, `BLOCK`
+- policy decision evidence summary
+- redaction result without raw sensitive value exposure
+
+### Planned MVP Layers Beyond Current SSOT
 
 - Single AI ingress shape
-- Provider abstraction contract and metadata
-- `/guard/check` text payload API
-- Rust text payload normalize / detect / score / decide
-- `ALLOW`, `REDACT`, `BLOCK`
-- Policy decision evidence
+- Provider abstraction contract and metadata wiring
+- HTTP `/guard/check` API
 - GuardEvent log sink without raw sensitive payload
 - Log-based monitoring and read-only SSE decision dashboard
 
@@ -51,10 +55,10 @@ MVP 본체는 **Provider-agnostic AI Guard Gateway**이며, text payload 기반 
 - 병렬 가능한 작업은 독립 브랜치와 git worktree로 분리한다.
 - Controller에는 오케스트레이션 로직을 넣지 않는다.
 - Kotlin Application Service와 Rust Domain/Application Service 내부에 private helper 중심 구조를 만들지 않는다.
-- Kotlin은 Gateway, API, provider abstraction, policy 저장/조회, GuardEvent 저장, monitoring/admin UI를 담당한다.
-- Rust는 text payload normalize, detect, redact, score, decision 생성을 담당한다.
+- Kotlin은 Gateway, API, provider abstraction, policy 저장/조회, GuardEvent 저장, monitoring/admin UI를 담당하는 **계획 계층**이다.
+- Rust는 현재 SSOT 기준으로 text payload normalize, detect, redact, score, decision 생성을 담당한다.
 - Spring은 runtime 검사 병목이 되지 않아야 하며, 고성능 운영 모드에서는 Rust decision path와 Spring monitoring path를 분리한다.
-- GuardEvent 발행/저장은 decision 반환 경로를 막지 않는 방향으로 설계한다.
+- GuardEvent 발행/저장은 상위 Gateway/Monitoring 구현 시 decision 반환 경로를 막지 않는 방향으로 설계한다.
 - 원문 민감정보는 audit log나 monitoring event에 저장하지 않는다.
 - Extension module은 MVP 본체 contract를 깨지 않는 방향으로 별도 단계에서 붙인다.
 
@@ -249,12 +253,15 @@ MVP contract는 본체에 필요한 필드만 활성화한다.
 포함:
 
 - text payload 검사
-- provider metadata
-- principal metadata
-- policy revision
 - decision evidence
 - redaction result
 - health check
+
+proto contract 상 존재하거나 예정이지만 현재 Rust core decision에는 아직 깊게 반영되지 않음:
+
+- provider metadata
+- principal metadata
+- policy revision
 
 제외 또는 reserved:
 
