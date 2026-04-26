@@ -6,11 +6,11 @@
 
 최신 제품 구조는 3계층이다.
 
-1. **MVP 본체**: Gateway + Policy Decision + Audit
-2. **확장 모듈**: Permission-aware Context Filter, High-Risk Action Review
-3. **검증 도구**: Regression / Eval Pack
+1. **MVP Runtime Path**: Rust Guard Core/Service가 text payload를 검사하고 `ALLOW`, `REDACT`, `BLOCK` 결정을 생성한다.
+2. **Monitoring/Admin Path**: Spring Gateway/Admin이 GuardEvent를 원문 없이 저장하고 로그 기반 모니터링과 SSE 대시보드를 제공한다.
+3. **확장 모듈/검증 도구**: Permission-aware Context Filter, High-Risk Action Review, Regression / Eval Pack.
 
-MVP 본체는 **Provider-agnostic AI Guard Gateway**이며, text payload 기반 `/guard/check` API를 통해 `ALLOW`, `REDACT`, `BLOCK` 결정을 반환하고 감사 로그에 원문 없이 기록한다.
+MVP 본체는 **Provider-agnostic AI Guard Gateway**이며, text payload 기반 `/guard/check` API를 통해 `ALLOW`, `REDACT`, `BLOCK` 결정을 반환한다. 운영 관점에서는 동일 결과를 `GuardEvent`로 기록하고, Spring은 검사 병목이 아니라 **로그·감사·모니터링·SSE 알림 계층**으로 동작한다.
 
 ## Current Baseline
 
@@ -30,8 +30,8 @@ MVP 본체는 **Provider-agnostic AI Guard Gateway**이며, text payload 기반 
 - Rust text payload normalize / detect / score / decide
 - `ALLOW`, `REDACT`, `BLOCK`
 - Policy decision evidence
-- Audit logging without raw sensitive payload
-- Read-only decision dashboard
+- GuardEvent persistence without raw sensitive payload
+- Log-based monitoring and read-only SSE decision dashboard
 
 ### Move Out Of MVP Body
 
@@ -50,9 +50,11 @@ MVP 본체는 **Provider-agnostic AI Guard Gateway**이며, text payload 기반 
 - 병렬 가능한 작업은 독립 브랜치와 git worktree로 분리한다.
 - Controller에는 오케스트레이션 로직을 넣지 않는다.
 - Kotlin Application Service와 Rust Domain/Application Service 내부에 private helper 중심 구조를 만들지 않는다.
-- Kotlin은 Gateway, API, provider abstraction, policy 저장/조회, audit, UI를 담당한다.
+- Kotlin은 Gateway, API, provider abstraction, policy 저장/조회, GuardEvent 저장, monitoring/admin UI를 담당한다.
 - Rust는 text payload normalize, detect, redact, score, decision 생성을 담당한다.
-- 원문 민감정보는 audit log에 저장하지 않는다.
+- Spring은 runtime 검사 병목이 되지 않아야 하며, 고성능 운영 모드에서는 Rust decision path와 Spring monitoring path를 분리한다.
+- GuardEvent 발행/저장은 decision 반환 경로를 막지 않는 방향으로 설계한다.
+- 원문 민감정보는 audit log나 monitoring event에 저장하지 않는다.
 - Extension module은 MVP 본체 contract를 깨지 않는 방향으로 별도 단계에서 붙인다.
 
 ## Branch and Worktree Strategy
@@ -80,6 +82,8 @@ extension/*   선택 확장 모듈
 ../uai-bg-rust-service
 ../uai-bg-kotlin-gateway
 ../uai-bg-audit
+../uai-bg-monitoring
+../uai-bg-event-plan
 ../uai-bg-regression
 ../uai-bg-extension-context
 ../uai-bg-extension-action
@@ -120,9 +124,9 @@ extension/*   선택 확장 모듈
   ↓
 4C. /guard/check API
   ↓
-7A. Audit persistence
+7A. GuardEvent persistence
   ↓
-7B. Dashboard read-only
+7B. SSE monitoring dashboard
 
 3A. Rust core pure library
   ↓
@@ -624,11 +628,11 @@ runtime 본체와 분리된 검증 도구로 detector, normalization, provider r
 
 ---
 
-## Stage 7A. Audit Persistence
+## Stage 7A. GuardEvent Persistence
 
 ### Branch
 
-`audit/persistence-mvp`
+`audit/guard-event-persistence`
 
 ### Must Start After
 
@@ -644,11 +648,20 @@ runtime 본체와 분리된 검증 도구로 detector, normalization, provider r
 
 ### Goal
 
-Guard decision 결과를 원문 없이 저장한다.
+Guard decision 결과를 `GuardEvent`로 모델링하고, 원문 없이 저장한다. Spring은 runtime decision path의 병목이 아니라 event collector/persistence 계층으로 동작한다.
+
+### Runtime / Monitoring Separation Rules
+
+- [ ] Runtime decision은 Rust Core/Service가 생성한다.
+- [ ] Spring은 GuardEvent 저장·조회·모니터링을 담당한다.
+- [ ] GuardEvent 저장 실패가 `/guard/check` decision 자체를 오염시키지 않도록 실패 정책을 명시한다.
+- [ ] 장기 고성능 모드에서는 `Client → Rust Guard Service → Decision` 경로와 `Rust → Spring Event Collector → SSE Dashboard` 경로를 분리할 수 있게 둔다.
+- [ ] MVP에서는 현재 `/guard/check` 응답 결과를 Spring 내부에서 GuardEvent로 저장한다.
 
 ### Tasks
 
-- [ ] AuditEvent model을 정의한다.
+- [ ] `GuardEvent` domain model을 정의한다.
+- [ ] `GuardEventRepository` port를 정의한다.
 - [ ] DB migration 도구를 선택한다.
 - [ ] PostgreSQL schema를 정의한다.
 - [ ] content hash 저장 방식을 구현한다.
@@ -656,32 +669,38 @@ Guard decision 결과를 원문 없이 저장한다.
 - [ ] violation detail 저장 구조를 구현한다.
 - [ ] provider/model/principal/payload type/decision 필드를 저장한다.
 - [ ] core latency를 저장한다.
+- [ ] event severity와 high-risk 여부를 저장한다.
+- [ ] Spring application log에 request id, decision, risk score, event id를 structured 형태로 남긴다.
 - [ ] retention 정책 placeholder를 둔다.
+- [ ] future async event publisher interface placeholder를 둔다.
 
-### Audit Must Not Store
+### GuardEvent Must Not Store
 
 - [ ] full prompt 원문
 - [ ] full response 원문
 - [ ] full DB/RAG/tool result 원문
 - [ ] raw secret/token/private key
+- [ ] unredacted matched snippet
 
 ### Verification
 
 - [ ] Testcontainers PostgreSQL 테스트 통과
-- [ ] `BLOCK` / `REDACT` event 저장 테스트 통과
+- [ ] `BLOCK` / `REDACT` GuardEvent 저장 테스트 통과
 - [ ] 원문 민감정보 저장 방지 테스트 통과
+- [ ] GuardEvent 저장 실패 정책 테스트 통과
+- [ ] Kotlin unit test는 domain layer에만 두고, persistence/framework 검증은 integration test로 둔다.
 
 ### Merge Gate
 
-- Stage 7B dashboard와 Stage 8 hardening 전 `main`에 merge한다.
+- Stage 7B SSE dashboard와 Stage 8 hardening 전 `main`에 merge한다.
 
 ---
 
-## Stage 7B. Read-Only Dashboard
+## Stage 7B. SSE Monitoring Dashboard
 
 ### Branch
 
-`audit/dashboard-readonly`
+`monitoring/sse-dashboard`
 
 ### Must Start After
 
@@ -689,27 +708,38 @@ Guard decision 결과를 원문 없이 저장한다.
 
 ### Worktree
 
-`../uai-bg-audit`
+`../uai-bg-monitoring`
 
 ### Goal
 
-Thymeleaf 기반으로 Guard decision 결과를 조회한다.
+Thymeleaf 기반으로 GuardEvent를 조회하고, high-risk event를 Spring SSE endpoint로 브라우저에 즉시 push한다.
+
+### Runtime / Monitoring Separation Rules
+
+- [ ] Browser 실시간 알림은 `Spring → Browser` SSE로 제공한다.
+- [ ] Rust/Spring 내부 이벤트 전달은 MVP에서 DB/log 기반으로 시작하고, 후속 단계에서 gRPC streaming 또는 broker로 확장 가능하게 둔다.
+- [ ] Dashboard 장애가 `/guard/check` decision path에 영향을 주지 않는다.
+- [ ] 화면에는 원문 payload를 표시하지 않고 redacted summary/evidence만 표시한다.
 
 ### Tasks
 
 - [ ] dashboard route를 정의한다.
 - [ ] decision summary 화면을 만든다.
-- [ ] recent events 화면을 만든다.
+- [ ] recent GuardEvent 화면을 만든다.
 - [ ] event detail 화면을 만든다.
+- [ ] high-risk GuardEvent SSE endpoint를 만든다.
+- [ ] Browser SSE reconnect 기준을 정의한다.
+- [ ] 문제 부분은 redacted summary와 evidence offset 기준으로 표시한다.
 - [ ] core health 표시 영역을 만든다.
 - [ ] policy hit 표시 placeholder를 만든다.
 - [ ] 관리자 인증 placeholder를 둔다.
 
 ### Verification
 
-- [ ] Thymeleaf rendering test 통과
+- [ ] Thymeleaf rendering integration test 통과
+- [ ] SSE endpoint integration test 통과
 - [ ] event detail에 원문 payload가 표시되지 않는다.
-- [ ] block/redact count가 표시된다.
+- [ ] block/redact/high-risk count가 표시된다.
 
 ### Merge Gate
 
@@ -727,8 +757,8 @@ Thymeleaf 기반으로 Guard decision 결과를 조회한다.
 
 - Stage 5 is merged into `main`.
 - Stage 6 is merged into `main`.
-- Stage 7A is merged into `main`.
-- Stage 7B is merged into `main`.
+- Stage 7A GuardEvent persistence is merged into `main`.
+- Stage 7B SSE monitoring dashboard is merged into `main`.
 
 ### Goal
 
@@ -750,7 +780,8 @@ MVP 본체를 실행 가능한 상태로 고정한다.
 - [ ] 전체 Rust test 통과
 - [ ] `/guard/check` e2e 통과
 - [ ] audit 원문 저장 금지 테스트 통과
-- [ ] dashboard read-only 조회 통과
+- [ ] GuardEvent persistence 테스트 통과
+- [ ] SSE monitoring read-only 조회 통과
 
 ### Merge Gate
 
