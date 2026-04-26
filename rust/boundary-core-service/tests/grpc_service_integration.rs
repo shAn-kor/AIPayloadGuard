@@ -42,7 +42,24 @@ async fn check_returns_redact_for_pii() {
         .into_inner();
 
     assert_eq!(response.decision, DecisionType::Redact as i32);
-    assert!(response.redaction_result.expect("redaction result").redacted);
+    let redaction = response.redaction_result.expect("redaction result");
+    assert!(redaction.redacted);
+    assert!(!redaction.redacted_content.contains("user@example.com"));
+}
+
+#[tokio::test]
+async fn check_returns_redact_for_secret() {
+    let service = BoundaryGuardService::new(GuardCore::new());
+    let response = service
+        .check(Request::new(request("token sk-1234567890abcdefghijklmnop")))
+        .await
+        .expect("check should succeed")
+        .into_inner();
+
+    assert_eq!(response.decision, DecisionType::Redact as i32);
+    let redaction = response.redaction_result.expect("redaction result");
+    assert!(redaction.redacted);
+    assert!(!redaction.redacted_content.contains("sk-1234567890abcdefghijklmnop"));
 }
 
 #[tokio::test]

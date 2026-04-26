@@ -110,4 +110,25 @@ mod tests {
         assert!(result.redacted);
         assert_eq!(result.redacted_content, "email [REDACTED:PII]");
     }
+
+    #[test]
+    fn redacts_original_secret_span() {
+        let original = "token sk-1234567890abcdefghijklmnop";
+        let findings = vec![DetectorFinding {
+            policy_id: "secret.openai_api_key".to_string(),
+            kind: FindingKind::Secret,
+            severity: Severity::High,
+            start_offset: 6,
+            end_offset: original.len(),
+            detector: "secret".to_string(),
+            normalized_source: "original".to_string(),
+            message: "Secret-like token detected".to_string(),
+        }];
+
+        let result = redact(original, &findings);
+
+        assert!(result.redacted);
+        assert_eq!(result.redacted_content, "token [REDACTED:SECRET]");
+        assert!(!result.redacted_content.contains("sk-1234567890abcdefghijklmnop"));
+    }
 }
