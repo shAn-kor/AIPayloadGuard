@@ -775,22 +775,35 @@ MVP 본체를 실행 가능한 상태로 고정한다.
 
 ### Tasks
 
-- [ ] root-level build/test command를 정리한다.
-- [ ] Kotlin build/test를 실행한다.
-- [ ] Rust build/test를 실행한다.
-- [ ] integration test를 실행한다.
-- [ ] regression fixture test를 실행한다.
-- [ ] known limitations를 계획 문서에 반영한다.
-- [ ] 다음 확장 module 시작 조건을 정리한다.
+- [x] root-level build/test command를 정리한다.
+- [x] Kotlin build/test를 실행한다.
+- [x] Rust build/test를 실행한다.
+- [x] integration test를 실행한다.
+- [x] regression fixture test를 실행한다.
+- [x] known limitations를 계획 문서에 반영한다.
+- [x] 다음 확장 module 시작 조건을 정리한다.
 
 ### Verification
 
-- [ ] 전체 Kotlin test 통과
-- [ ] 전체 Rust test 통과
-- [ ] `/guard/check` e2e 통과
-- [ ] audit 원문 저장 금지 테스트 통과
-- [ ] GuardEvent log sink 테스트 통과
-- [ ] SSE monitoring read-only 조회 통과
+- [x] 전체 Kotlin test 통과
+- [x] 전체 Rust test 통과
+- [x] `/guard/check` e2e 통과
+- [x] audit 원문 저장 금지 테스트 통과
+- [x] GuardEvent log sink 테스트 통과
+- [x] SSE monitoring read-only 조회 통과
+
+### MVP Hardening Notes
+
+- Root-level MVP validation command: `./scripts/validate-mvp.sh`
+- Kotlin Gateway에는 도메인 단위 테스트가 없으므로 `./gradlew test`는 `NO-SOURCE`가 정상이다.
+- Kotlin Gateway의 API, monitoring, sink, E2E 검증은 `./gradlew integrationTest`에서 수행한다.
+- Rust `boundary-core`의 순수 core 테스트와 regression/eval pack은 `cargo test`에서 수행한다.
+- Rust `boundary-core-service` gRPC 검증은 Rust integration test로 수행한다.
+- 현재 MVP runtime path는 compatibility/debug 성격의 `Client → Spring /guard/check → Rust Core Service`이다.
+- 다음 Stage 9/10에서 고성능 운영 경로인 `Client / LLM App → Rust Guard Runtime → Decision`을 별도로 계획/구현한다.
+- GuardEvent 기본 저장은 RDB가 아니라 JSONL append-only log와 in-memory recent buffer이다.
+- GuardEvent에는 원문 payload를 저장하지 않고 content hash, redacted summary, violation evidence만 남긴다.
+- File/attachment, APT, action review, permission-aware context filtering은 MVP 범위 밖의 확장 단계로 유지한다.
 
 ### Merge Gate
 
