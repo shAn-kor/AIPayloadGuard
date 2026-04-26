@@ -1,4 +1,5 @@
 import com.google.protobuf.gradle.id
+import org.gradle.api.tasks.testing.Test
 
 plugins {
     kotlin("jvm") version "1.9.25"
@@ -80,8 +81,36 @@ sourceSets {
             srcDir("../proto")
         }
     }
+    create("integrationTest") {
+        kotlin.srcDir("src/integrationTest/kotlin")
+        resources.srcDir("src/integrationTest/resources")
+        compileClasspath += sourceSets.main.get().output + configurations.testRuntimeClasspath.get()
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+configurations {
+    named("integrationTestImplementation") {
+        extendsFrom(configurations.testImplementation.get())
+    }
+    named("integrationTestRuntimeOnly") {
+        extendsFrom(configurations.testRuntimeOnly.get())
+    }
 }
 
 tasks.withType<Test> {
     useJUnitPlatform()
+}
+
+val integrationTest by tasks.registering(Test::class) {
+    description = "Runs integration tests."
+    group = "verification"
+    testClassesDirs = sourceSets["integrationTest"].output.classesDirs
+    classpath = sourceSets["integrationTest"].runtimeClasspath
+    shouldRunAfter(tasks.test)
+    useJUnitPlatform()
+}
+
+tasks.check {
+    dependsOn(integrationTest)
 }
