@@ -10,7 +10,15 @@ import com.boundaryguard.contract.guard.v1.ViolationEvidence
 import com.boundaryguard.contract.guard.v1.ViolationType
 import com.boundaryguard.gateway.application.GuardCheckApplicationService
 import com.boundaryguard.gateway.application.GuardCheckProtoMapper
+import com.boundaryguard.gateway.audit.GuardEvent
+import com.boundaryguard.gateway.audit.GuardEventFactory
+import com.boundaryguard.gateway.audit.GuardEventRecorder
+import com.boundaryguard.gateway.audit.GuardEventRepository
 import com.boundaryguard.gateway.coreclient.RustCoreClient
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
@@ -106,13 +114,68 @@ class GuardCheckControllerTests @Autowired constructor(
         }
     }
 
+    @Test
+    fun `guard check records guard event without original content`(@Autowired repository: InMemoryGuardEventRepository) {
+        val asyncResult = mockMvc.post("/guard/check") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """
+                {
+                  "requestId": "req-redact-1",
+                  "payloadType": "PROMPT",
+                  "content": "email user@example.com",
+                  "policyRevision": "builtin-mvp"
+                }
+            """.trimIndent()
+        }.andExpect {
+            request { asyncStarted() }
+        }.andReturn()
+
+        mockMvc.perform(asyncDispatch(asyncResult))
+            .andExpect(status().isOk)
+
+        val event = repository.savedEvents.single()
+        assertEquals("req-redact-1", event.requestId)
+        assertEquals("REDACT", event.decision.name)
+        assertEquals(60, event.riskScore)
+        assertEquals("email [REDACTED:PII]", event.redactedSummary)
+        assertEquals(false, repository.containsOriginalContent("email user@example.com"))
+        assertEquals(true, repository.containsOriginalContent("[REDACTED:PII]"))
+    }
+
     class TestConfiguration {
         @Bean
-        fun guardCheckApplicationService(rustCoreClient: RustCoreClient): GuardCheckApplicationService =
-            GuardCheckApplicationService(rustCoreClient, GuardCheckProtoMapper())
+        fun guardCheckApplicationService(
+            rustCoreClient: RustCoreClient,
+            guardEventRecorder: GuardEventRecorder,
+        ): GuardCheckApplicationService =
+            GuardCheckApplicationService(rustCoreClient, GuardCheckProtoMapper(), guardEventRecorder)
+
+        @Bean
+        fun guardEventRecorder(repository: GuardEventRepository): GuardEventRecorder = GuardEventRecorder(
+            guardEventFactory = GuardEventFactory(Clock.fixed(Instant.parse("2026-04-26T00:00:00Z"), ZoneOffset.UTC)),
+            guardEventRepository = repository,
+        )
+
+        @Bean
+        fun guardEventRepository(): InMemoryGuardEventRepository = InMemoryGuardEventRepository()
 
         @Bean
         fun rustCoreClient(): RustCoreClient = FakeRustCoreClient()
+    }
+}
+
+class InMemoryGuardEventRepository : GuardEventRepository {
+    val savedEvents = mutableListOf<GuardEvent>()
+
+    override fun save(event: GuardEvent): GuardEvent {
+        savedEvents += event
+        return event
+    }
+
+    fun containsOriginalContent(value: String): Boolean = savedEvents.any { event ->
+        event.contentHash.contains(value) ||
+            event.redactedSummary.orEmpty().contains(value) ||
+            event.violations.any { violation -> violation.message.contains(value) }
     }
 }
 

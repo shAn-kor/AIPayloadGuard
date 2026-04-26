@@ -30,6 +30,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
+    implementation("org.springframework.boot:spring-boot-starter-jdbc")
+    implementation("org.flywaydb:flyway-core")
+    runtimeOnly("org.postgresql:postgresql")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
 
     implementation("com.google.protobuf:protobuf-kotlin:$protobufVersion")
@@ -48,6 +51,7 @@ dependencies {
     testImplementation("io.grpc:grpc-inprocess:$grpcVersion")
     testImplementation("io.grpc:grpc-testing:$grpcVersion")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
+    testRuntimeOnly("com.h2database:h2")
 }
 
 protobuf {
@@ -83,7 +87,6 @@ sourceSets {
     }
     create("integrationTest") {
         kotlin.srcDir("src/integrationTest/kotlin")
-        resources.srcDir("src/integrationTest/resources")
         compileClasspath += sourceSets.main.get().output + configurations.testRuntimeClasspath.get()
         runtimeClasspath += output + compileClasspath
     }
