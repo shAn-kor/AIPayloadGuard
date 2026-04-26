@@ -43,12 +43,56 @@ static PROMPT_INJECTION_PATTERNS: Lazy<Vec<(&str, Regex)>> = Lazy::new(|| {
             Regex::new(r"(?i)\b(ignore|disregard|forget)\b.{0,40}\b(previous|prior|above|system|developer)\b.{0,40}\b(instructions?|rules?|messages?)\b").unwrap(),
         ),
         (
+            "prompt_injection.compact_instruction_override",
+            Regex::new(r"(?i)\b(ignorepreviousinstructions|ignoreallpreviousinstructions|disregardpreviousinstructions|forgetallpreviousrules)").unwrap(),
+        ),
+        (
             "prompt_injection.system_prompt_extraction",
-            Regex::new(r"(?i)\b(reveal|show|print|dump|exfiltrate)\b.{0,40}\b(system prompt|developer message|hidden instructions?)\b").unwrap(),
+            Regex::new(r"(?i)\b(reveal|show|print|dump|exfiltrate|display)\b.{0,80}\b(system prompt|developer message|hidden instructions?|chain[- ]?of[- ]?thought|reasoning trace|scratchpad)\b").unwrap(),
         ),
         (
             "prompt_injection.policy_bypass",
-            Regex::new(r"(?i)\b(bypass|disable|override)\b.{0,40}\b(policy|guard|safety|security|filter)\b").unwrap(),
+            Regex::new(r"(?i)\b(bypass|disable|override|turn off|remove|ignore)\b.{0,80}\b(policy|guard|safety|security|filter|guardrail|alignment|content policy|moderation)\b").unwrap(),
+        ),
+        (
+            "prompt_injection.jailbreak_persona",
+            Regex::new(r"(?i)\b(you are|act as|pretend to be|simulate|roleplay as|enter)\b.{0,80}\b(DAN|do anything now|developer mode|jailbreak|uncensored|unfiltered|evil mode|god mode|sudo mode|root mode)\b").unwrap(),
+        ),
+        (
+            "prompt_injection.safety_refusal_suppression",
+            Regex::new(r"(?i)\b(do not|don't|never|must not|without)\b.{0,80}\b(refuse|decline|warn|mention safety|mention policy|ethical|legal|limitations?|disclaimer)\b").unwrap(),
+        ),
+        (
+            "prompt_injection.indirect_context_instruction",
+            Regex::new(r"(?i)\b(this document|this page|this email|hidden instruction|system note|note to assistant|assistant instruction|model instruction)\b.{0,100}\b(overrides?|ignore|disregard|follow only|takes precedence|highest priority)\b.{0,100}\b(instructions?|rules?|system|developer|previous)\b").unwrap(),
+        ),
+        (
+            "prompt_injection.role_hijack",
+            Regex::new(r"(?i)\b(from now on|for the rest of this conversation|new rule|priority instruction|system override)\b.{0,100}\b(obey|follow|answer|comply|ignore|disregard)\b").unwrap(),
+        ),
+        (
+            "prompt_injection.delimiter_smuggling",
+            Regex::new(r"(?i)(```|<\/?system>|<\/?developer>|\[/?system\]|\[/?developer\]|###\s*(system|developer|instruction))").unwrap(),
+        ),
+        (
+            "prompt_injection.tool_exfiltration",
+            Regex::new(r"(?i)\b(use|call|invoke|run)\b.{0,80}\b(tool|function|plugin|browser|retrieval|python|shell)\b.{0,120}\b(send|post|upload|exfiltrate|export|leak|dump)\b.{0,120}\b(secrets?|tokens?|api keys?|system prompt|customer records?|credentials?|private keys?|env(?:ironment)? variables?)\b").unwrap(),
+        ),
+        (
+            "prompt_injection.encoded_payload_marker",
+            Regex::new(r"(?i)\b(base64|hex|rot13|decode this|encoded instruction|payload)\b.{0,100}\b(ignore|disregard|bypass|reveal|exfiltrate|system prompt)\b").unwrap(),
+        ),
+        (
+            "prompt_injection.persuasion_attack",
+            Regex::new(r"(?i)\b(for research|for auditing|red team|authorized test|hypothetical|fictional|educational|simulation)\b.{0,120}\b(ignore|bypass|disable|reveal|exfiltrate|jailbreak)\b").unwrap(),
+        ),
+        (
+            "prompt_injection.multi_turn_trigger",
+            Regex::new(r"(?i)\b(when I say|if I later say|after I type|trigger phrase|activation phrase)\b.{0,100}\b(ignore|bypass|reveal|dump|exfiltrate|developer mode)\b").unwrap(),
+        ),
+        (
+            "prompt_injection.sensitive_data_request",
+            Regex::new(r"(?i)\b(ignore|bypass|override|without|regardless of)\b.{0,80}\b(permission|authorization|access control|tenant|role|policy)\b.{0,120}\b(customer records?|all users?|emails?|phone numbers?|secrets?|tokens?|api keys?|credentials?)\b").unwrap(),
         ),
         (
             "prompt_injection.ko_instruction_override",
@@ -57,6 +101,14 @@ static PROMPT_INJECTION_PATTERNS: Lazy<Vec<(&str, Regex)>> = Lazy::new(|| {
         (
             "prompt_injection.ko_system_prompt_extraction",
             Regex::new(r"(시스템\s*프롬프트|숨겨진\s*지시(문)?).{0,20}(출력|보여|공개|드러내)").unwrap(),
+        ),
+        (
+            "prompt_injection.ko_jailbreak",
+            Regex::new(r"(탈옥|검열\s*없이|제한\s*없이|안전\s*정책\s*무시|개발자\s*모드|DAN)").unwrap(),
+        ),
+        (
+            "prompt_injection.ko_sensitive_data_bypass",
+            Regex::new(r"(관리자\s*권한|권한|정책).{0,30}(무시|우회).{0,60}(전체\s*고객|모든\s*고객|고객\s*정보|이메일|전화번호|토큰|비밀)").unwrap(),
         ),
     ]
 });
