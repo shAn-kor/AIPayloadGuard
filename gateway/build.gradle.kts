@@ -35,10 +35,15 @@ dependencies {
     implementation("io.grpc:grpc-protobuf:$grpcVersion")
     implementation("io.grpc:grpc-stub:$grpcVersion")
     implementation("io.grpc:grpc-kotlin-stub:$grpcKotlinVersion")
+    implementation("io.grpc:grpc-netty-shaded:$grpcVersion")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
     implementation("javax.annotation:javax.annotation-api:1.3.2")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    testImplementation("io.grpc:grpc-inprocess:$grpcVersion")
+    testImplementation("io.grpc:grpc-testing:$grpcVersion")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
 }
 
 protobuf {
