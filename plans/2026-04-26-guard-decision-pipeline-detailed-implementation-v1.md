@@ -42,6 +42,8 @@ MVP 본체는 **Provider-agnostic AI Guard Gateway**이며, text payload 기반 
 
 ## Non-Negotiable Implementation Rules
 
+- 새 기능 브랜치는 **반드시 별도 git worktree에서만** 작업한다.
+- 메인 repository checkout은 `main` 유지와 병합/검증 전용으로 사용한다.
 - 모든 구현 작업은 기능별 브랜치를 만든 뒤 진행한다.
 - 각 기능 브랜치는 검증 후 `main`에 머지한다.
 - 이전 단계 산출물이 필요한 작업은 반드시 선행 단계가 `main`에 머지된 뒤 시작한다.
@@ -85,8 +87,12 @@ extension/*   선택 확장 모듈
 
 ### Worktree Rules
 
+- 새 기능 브랜치는 메인 checkout에서 직접 작업하지 않는다.
+- 새 기능 브랜치는 `git worktree add -b <branch> <path> main` 형태로 생성한다.
+- 메인 checkout은 항상 `main`에 두고, 다른 세션의 메인 작업을 방해하지 않는다.
+- 메인 checkout에서 허용되는 작업은 `git status`, `git log`, finished branch merge, 전체 검증뿐이다.
 - 동시에 수정하는 파일 경로가 겹치면 병렬 작업하지 않는다.
-- `proto/` contract 변경은 항상 contract branch에서만 수행한다.
+- `proto/` contract 변경은 항상 contract branch worktree에서만 수행한다.
 - Kotlin/Rust 구현 브랜치는 contract branch가 `main`에 merge된 뒤 시작한다.
 - 병렬 브랜치는 항상 최신 `main`에서 생성한다.
 - 병렬 작업 완료 후 merge 순서는 dependency order를 따른다.
@@ -902,13 +908,13 @@ Constraints:
 
 ## First Implementation Slice After Plan Alignment
 
-다음 구현 브랜치는 이미 구현된 scaffold를 최신 계획 기준으로 재검증/수정하는 단계다.
+다음 구현 브랜치는 반드시 메인 checkout이 아니라 별도 worktree에서 시작한다.
 
 ```text
-chore/align-scaffold-to-modular-scope
+git worktree add -b contract/guard-check-v1 ../uai-bg-contract main
 ```
 
-이후 `contract/guard-check-v1`로 넘어간다.
+`chore/align-scaffold-to-modular-scope`는 최신 계획 정렬 과정에서 스캐폴드 재검증과 Java 21 정렬까지 완료된 상태다. 이후 구현은 `contract/guard-check-v1` worktree에서 진행한다.
 
 ## Definition of Done for MVP Body
 
