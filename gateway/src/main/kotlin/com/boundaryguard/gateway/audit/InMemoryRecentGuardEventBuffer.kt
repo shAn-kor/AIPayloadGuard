@@ -18,6 +18,18 @@ class InMemoryRecentGuardEventBuffer : GuardEventSink {
         }
     }
 
+    fun publishIfAbsent(event: GuardEvent) {
+        synchronized(events) {
+            if (events.any { existing -> existing.eventId == event.eventId }) {
+                return
+            }
+            if (events.size >= DEFAULT_RECENT_EVENT_CAPACITY) {
+                events.removeFirst()
+            }
+            events.addLast(event)
+        }
+    }
+
     fun recent(limit: Int = DEFAULT_RECENT_EVENT_CAPACITY): List<GuardEvent> {
         require(limit >= 0) { "limit must not be negative" }
         return synchronized(events) {
