@@ -14,11 +14,12 @@ MVP 본체는 **Provider-agnostic AI Guard Gateway**이며, text payload 기반 
 
 ## Current Baseline
 
-- Current main baseline: `f3f62a0 merge: monorepo scaffold`
-- Existing scaffold branch already merged: `chore/monorepo-scaffold`
-- Existing Kotlin Gateway scaffold: `gateway/`
-- Existing Rust workspace scaffold: `rust/`
-- Existing protobuf placeholder: `proto/guard/v1/.gitkeep`
+- Current main baseline: `3d8bcac merge: sse guard event dashboard`
+- Completed scaffold branch: `chore/monorepo-scaffold`
+- Completed contract branch: `contract/guard-check-v1`
+- Completed Rust core/service branches: `core/rust-guard-pipeline`, `service/rust-core-grpc`
+- Completed Kotlin Gateway branches: `gateway/rust-core-client`, `gateway/guard-check-api`
+- Completed monitoring branches: `audit/log-event-sink`, `monitoring/sse-dashboard`
 
 ## Scope Alignment With Updated High-Level Plan
 
@@ -30,7 +31,7 @@ MVP 본체는 **Provider-agnostic AI Guard Gateway**이며, text payload 기반 
 - Rust text payload normalize / detect / score / decide
 - `ALLOW`, `REDACT`, `BLOCK`
 - Policy decision evidence
-- GuardEvent persistence without raw sensitive payload
+- GuardEvent log sink without raw sensitive payload
 - Log-based monitoring and read-only SSE decision dashboard
 
 ### Move Out Of MVP Body
@@ -114,7 +115,7 @@ extension/*   선택 확장 모듈
   ↓
 3B. Rust gRPC core service
   ↓
-5. Integration tests
+5. End-to-end integration
 
 2. Contract first design
   ↓
@@ -124,7 +125,7 @@ extension/*   선택 확장 모듈
   ↓
 4C. /guard/check API
   ↓
-7A. GuardEvent persistence
+7A. GuardEvent log sink
   ↓
 7B. SSE monitoring dashboard
 
@@ -136,9 +137,13 @@ extension/*   선택 확장 모듈
   ↓
 8. MVP hardening
   ↓
-9A. Optional context filter extension
+9. Rust runtime direct path plan
   ↓
-9B. Optional action review extension
+10. Rust runtime direct path implementation
+  ↓
+11A. Optional context filter extension
+  ↓
+11B. Optional action review extension
 ```
 
 ## Stage 0. Updated Plan Alignment
@@ -755,13 +760,13 @@ Thymeleaf 기반으로 GuardEvent를 조회하고, high-risk event를 Spring SSE
 
 ### Branch
 
-`chore/mvp-hardening`
+`stabilization/mvp-hardening`
 
 ### Must Start After
 
 - Stage 5 is merged into `main`.
 - Stage 6 is merged into `main`.
-- Stage 7A GuardEvent persistence is merged into `main`.
+- Stage 7A GuardEvent log sink is merged into `main`.
 - Stage 7B SSE monitoring dashboard is merged into `main`.
 
 ### Goal
@@ -784,7 +789,7 @@ MVP 본체를 실행 가능한 상태로 고정한다.
 - [ ] 전체 Rust test 통과
 - [ ] `/guard/check` e2e 통과
 - [ ] audit 원문 저장 금지 테스트 통과
-- [ ] GuardEvent persistence 테스트 통과
+- [ ] GuardEvent log sink 테스트 통과
 - [ ] SSE monitoring read-only 조회 통과
 
 ### Merge Gate
@@ -793,7 +798,82 @@ MVP 본체를 실행 가능한 상태로 고정한다.
 
 ---
 
-## Extension Stage 9A. Permission-Aware Context Filter Module
+## Stage 9. Rust Runtime Direct Path Plan
+
+### Branch
+
+`plan/rust-runtime-direct-path`
+
+### Must Start After
+
+- Stage 8 is merged into `main`.
+
+### Worktree
+
+`../uai-bg-rust-runtime-plan`
+
+### Goal
+
+Spring이 runtime 검사 병목이 되지 않도록, 장기 운영 모드에서 `Client / LLM App → Rust Guard Runtime → Decision` 경로와 `Rust Guard Runtime → Spring Monitoring/Admin → SSE Dashboard` 경로를 분리하는 상세 계획을 작성한다.
+
+### Planning Decisions
+
+- Rust runtime direct path는 MVP hardening 이후 시작한다.
+- Spring `/guard/check`는 compatibility/debug/admin path로 유지하거나 후순위에서 축소한다.
+- Rust runtime이 GuardEvent를 비동기로 발행하고, Spring은 event collector/monitoring 역할을 담당한다.
+- 기본 event delivery는 JSONL/log tail 또는 HTTP event collector로 시작하고, gRPC streaming/broker는 확장 옵션으로 둔다.
+- Runtime path는 Spring/SSE/dashboard 장애와 독립적으로 decision을 반환해야 한다.
+
+### Tasks
+
+- [ ] Rust direct `/guard/check` 또는 gRPC public endpoint shape를 정의한다.
+- [ ] Rust runtime event publishing interface를 설계한다.
+- [ ] Spring event collector API 또는 log tailer 선택 기준을 정의한다.
+- [ ] 기존 Kotlin `/guard/check`의 역할을 compatibility/debug/admin path로 재정의한다.
+- [ ] Rust runtime path에서 GuardEvent 원문 미저장 원칙을 다시 검증한다.
+- [ ] 운영 배포 형태를 같은 하드웨어 기준과 분리 하드웨어 기준으로 나눈다.
+- [ ] Stage 10 구현 범위를 확정한다.
+
+### Merge Gate
+
+- Stage 10 구현 전 `main`에 merge한다.
+
+---
+
+## Stage 10. Rust Runtime Direct Path Implementation
+
+### Branch
+
+`runtime/rust-direct-guard-path`
+
+### Must Start After
+
+- Stage 9 is merged into `main`.
+
+### Worktree
+
+`../uai-bg-rust-runtime`
+
+### Goal
+
+LLM 이용 클라이언트가 Spring을 통하지 않고 Rust Guard Runtime을 직접 호출할 수 있는 고성능 runtime path를 구현한다.
+
+### Tasks
+
+- [ ] Rust runtime public check endpoint를 구현한다.
+- [ ] Rust runtime에서 GuardEvent를 비동기로 생성한다.
+- [ ] Spring monitoring과 연결되는 event delivery MVP 방식을 구현한다.
+- [ ] Spring 장애 시 Rust runtime decision path가 계속 동작하는지 검증한다.
+- [ ] Kotlin `/guard/check`와 Rust direct path의 compatibility 기준을 문서화한다.
+- [ ] runtime path e2e 테스트를 추가한다.
+
+### Merge Gate
+
+- Rust direct path가 기존 MVP `/guard/check` contract와 monitoring path를 깨지 않아야 한다.
+
+---
+
+## Extension Stage 11A. Permission-Aware Context Filter Module
 
 ### Branch
 
@@ -801,7 +881,7 @@ MVP 본체를 실행 가능한 상태로 고정한다.
 
 ### Must Start After
 
-- Stage 8 is merged into `main`.
+- Stage 10 is merged into `main`.
 
 ### Goal
 
@@ -822,7 +902,7 @@ MVP 본체를 실행 가능한 상태로 고정한다.
 
 ---
 
-## Extension Stage 9B. High-Risk Action Review Module
+## Extension Stage 11B. High-Risk Action Review Module
 
 ### Branch
 
@@ -830,11 +910,11 @@ MVP 본체를 실행 가능한 상태로 고정한다.
 
 ### Must Start After
 
-- Stage 8 is merged into `main`.
+- Stage 10 is merged into `main`.
 
 ### Goal
 
-tool call, service call, command execution 같은 고위험 action을 실행 전 review 대상으로 승격한다.
+실행 전 고위험 action을 review 대상으로 승격한다.
 
 ### Tasks
 
@@ -901,15 +981,52 @@ Constraints:
 
 ```text
 main
- ├─ test/guard-check-e2e           worktree: ../uai-bg-regression
- └─ audit/persistence-mvp          worktree: ../uai-bg-audit
+ ├─ test/regression-eval-pack      worktree: ../uai-bg-regression
+ └─ audit/log-event-sink           worktree: ../uai-bg-log-audit
 ```
 
 Constraints:
 
-- Dashboard는 AuditEvent model이 merge된 뒤 시작한다.
+- Regression tooling은 runtime path에 의존성을 추가하지 않는다.
+- GuardEvent log sink는 RDB를 기본값으로 추가하지 않는다.
 
-### Parallel Window D: After Stage 8 Merge
+### Parallel Window D: After Stage 7A Merge
+
+```text
+main
+ └─ monitoring/sse-dashboard       worktree: ../uai-bg-monitoring
+```
+
+Constraints:
+
+- Dashboard는 GuardEvent log sink와 in-memory recent buffer가 merge된 뒤 시작한다.
+
+### Sequential Window E: Before MVP Hardening
+
+```text
+main
+ ├─ test/regression-eval-pack      worktree: ../uai-bg-regression
+ └─ test/guard-check-e2e           worktree: ../uai-bg-e2e
+```
+
+Constraints:
+
+- 두 브랜치가 같은 worktree path를 공유하지 않는다.
+- 두 브랜치가 같은 테스트 파일을 동시에 수정하지 않는다.
+
+### Sequential Window F: After Stage 8 Merge
+
+```text
+main
+ ├─ plan/rust-runtime-direct-path  worktree: ../uai-bg-rust-runtime-plan
+ └─ runtime/rust-direct-guard-path worktree: ../uai-bg-rust-runtime
+```
+
+Constraints:
+
+- runtime 구현은 direct path 계획 branch가 merge된 뒤 시작한다.
+
+### Parallel Window G: After Stage 10 Merge
 
 ```text
 main
@@ -932,13 +1049,15 @@ Constraints:
 5. service/rust-core-grpc
 6. gateway/rust-core-client
 7. gateway/guard-check-api
-8. test/regression-eval-pack
-9. test/guard-check-e2e
-10. audit/persistence-mvp
-11. audit/dashboard-readonly
-12. chore/mvp-hardening
-13. extension/context-filter
-14. extension/action-review
+8. audit/log-event-sink
+9. monitoring/sse-dashboard
+10. test/regression-eval-pack
+11. test/guard-check-e2e
+12. stabilization/mvp-hardening
+13. plan/rust-runtime-direct-path
+14. runtime/rust-direct-guard-path
+15. extension/context-filter
+16. extension/action-review
 ```
 
 ## First Implementation Slice After Plan Alignment
@@ -964,6 +1083,7 @@ git worktree add -b contract/guard-check-v1 ../uai-bg-contract main
 - [ ] Dashboard에서 decision event를 read-only로 볼 수 있다.
 - [ ] Regression / Eval Pack이 runtime과 분리되어 실행된다.
 - [ ] Rust/Kotlin/integration/regression test가 통과한다.
+- [ ] Rust direct runtime path 계획이 MVP hardening 이후 별도 단계로 정의되어 있다.
 
 ## Explicitly Out of MVP Body Scope
 
