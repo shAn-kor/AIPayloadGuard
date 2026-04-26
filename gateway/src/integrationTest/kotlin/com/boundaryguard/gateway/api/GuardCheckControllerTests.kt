@@ -13,7 +13,7 @@ import com.boundaryguard.gateway.application.GuardCheckProtoMapper
 import com.boundaryguard.gateway.audit.GuardEvent
 import com.boundaryguard.gateway.audit.GuardEventFactory
 import com.boundaryguard.gateway.audit.GuardEventRecorder
-import com.boundaryguard.gateway.audit.GuardEventRepository
+import com.boundaryguard.gateway.audit.GuardEventSink
 import com.boundaryguard.gateway.coreclient.RustCoreClient
 import java.time.Clock
 import java.time.Instant
@@ -115,7 +115,7 @@ class GuardCheckControllerTests @Autowired constructor(
     }
 
     @Test
-    fun `guard check records guard event without original content`(@Autowired repository: InMemoryGuardEventRepository) {
+    fun `guard check records guard event without original content`(@Autowired sink: CapturingGuardEventSink) {
         val asyncResult = mockMvc.post("/guard/check") {
             contentType = MediaType.APPLICATION_JSON
             content = """
@@ -133,13 +133,13 @@ class GuardCheckControllerTests @Autowired constructor(
         mockMvc.perform(asyncDispatch(asyncResult))
             .andExpect(status().isOk)
 
-        val event = repository.savedEvents.single()
+        val event = sink.publishedEvents.single()
         assertEquals("req-redact-1", event.requestId)
         assertEquals("REDACT", event.decision.name)
         assertEquals(60, event.riskScore)
         assertEquals("email [REDACTED:PII]", event.redactedSummary)
-        assertEquals(false, repository.containsOriginalContent("email user@example.com"))
-        assertEquals(true, repository.containsOriginalContent("[REDACTED:PII]"))
+        assertEquals(false, sink.containsOriginalContent("email user@example.com"))
+        assertEquals(true, sink.containsOriginalContent("[REDACTED:PII]"))
     }
 
     class TestConfiguration {
@@ -151,28 +151,27 @@ class GuardCheckControllerTests @Autowired constructor(
             GuardCheckApplicationService(rustCoreClient, GuardCheckProtoMapper(), guardEventRecorder)
 
         @Bean
-        fun guardEventRecorder(repository: GuardEventRepository): GuardEventRecorder = GuardEventRecorder(
+        fun guardEventRecorder(sink: GuardEventSink): GuardEventRecorder = GuardEventRecorder(
             guardEventFactory = GuardEventFactory(Clock.fixed(Instant.parse("2026-04-26T00:00:00Z"), ZoneOffset.UTC)),
-            guardEventRepository = repository,
+            guardEventSink = sink,
         )
 
         @Bean
-        fun guardEventRepository(): InMemoryGuardEventRepository = InMemoryGuardEventRepository()
+        fun guardEventSink(): CapturingGuardEventSink = CapturingGuardEventSink()
 
         @Bean
         fun rustCoreClient(): RustCoreClient = FakeRustCoreClient()
     }
 }
 
-class InMemoryGuardEventRepository : GuardEventRepository {
-    val savedEvents = mutableListOf<GuardEvent>()
+class CapturingGuardEventSink : GuardEventSink {
+    val publishedEvents = mutableListOf<GuardEvent>()
 
-    override fun save(event: GuardEvent): GuardEvent {
-        savedEvents += event
-        return event
+    override fun publish(event: GuardEvent) {
+        publishedEvents += event
     }
 
-    fun containsOriginalContent(value: String): Boolean = savedEvents.any { event ->
+    fun containsOriginalContent(value: String): Boolean = publishedEvents.any { event ->
         event.contentHash.contains(value) ||
             event.redactedSummary.orEmpty().contains(value) ||
             event.violations.any { violation -> violation.message.contains(value) }

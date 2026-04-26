@@ -8,11 +8,11 @@ import org.springframework.stereotype.Service
 @Service
 class GuardEventRecorder(
     private val guardEventFactory: GuardEventFactory,
-    private val guardEventRepository: GuardEventRepository,
+    private val guardEventSink: GuardEventSink,
 ) {
     fun record(request: GuardCheckHttpRequest, response: GuardCheckHttpResponse) {
         val event = guardEventFactory.create(request, response)
-        runCatching { guardEventRepository.save(event) }
+        runCatching { guardEventSink.publish(event) }
             .onSuccess {
                 log.info(
                     "guard_event_recorded eventId={} requestId={} decision={} riskScore={} highRisk={}",
