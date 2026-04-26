@@ -2,6 +2,7 @@
 members = [
     "boundary-core",
     "boundary-core-service",
+    "scenario-harness",
 ]
 resolver = "2"
 
