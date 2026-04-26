@@ -1,0 +1,125 @@
+syntax = "proto3";
+
+package guard.v1;
+
+option java_multiple_files = true;
+option java_package = "com.boundaryguard.contract.guard.v1";
+option java_outer_classname = "GuardProto";
+
+service GuardCoreService {
+  rpc Check(GuardCheckRequest) returns (GuardCheckResult);
+  rpc Health(CoreHealthCheckRequest) returns (CoreHealthCheckResult);
+}
+
+enum DecisionType {
+  DECISION_TYPE_UNSPECIFIED = 0;
+  DECISION_TYPE_ALLOW = 1;
+  DECISION_TYPE_REDACT = 2;
+  DECISION_TYPE_BLOCK = 3;
+  // Reserved for post-MVP extension flows.
+  reserved 4, 5;
+  reserved "DECISION_TYPE_REVIEW", "DECISION_TYPE_QUARANTINE";
+}
+
+enum PayloadType {
+  PAYLOAD_TYPE_UNSPECIFIED = 0;
+  PAYLOAD_TYPE_TEXT = 1;
+  PAYLOAD_TYPE_PROMPT = 2;
+  PAYLOAD_TYPE_RESPONSE = 3;
+  PAYLOAD_TYPE_DATA_EGRESS = 4;
+}
+
+enum ProviderType {
+  PROVIDER_TYPE_UNSPECIFIED = 0;
+  PROVIDER_TYPE_OPENAI_COMPATIBLE = 1;
+  PROVIDER_TYPE_ANTHROPIC = 2;
+  PROVIDER_TYPE_GOOGLE = 3;
+  PROVIDER_TYPE_INTERNAL = 4;
+}
+
+enum ViolationType {
+  VIOLATION_TYPE_UNSPECIFIED = 0;
+  VIOLATION_TYPE_PROMPT_INJECTION = 1;
+  VIOLATION_TYPE_PII = 2;
+  VIOLATION_TYPE_SECRET = 3;
+  VIOLATION_TYPE_POLICY = 4;
+}
+
+enum Severity {
+  SEVERITY_UNSPECIFIED = 0;
+  SEVERITY_LOW = 1;
+  SEVERITY_MEDIUM = 2;
+  SEVERITY_HIGH = 3;
+  SEVERITY_CRITICAL = 4;
+}
+
+message GuardCheckRequest {
+  string request_id = 1;
+  PayloadType payload_type = 2;
+  string content = 3;
+  ProviderMetadata provider_metadata = 4;
+  PrincipalContext principal_context = 5;
+  string policy_revision = 6;
+  map<string, string> metadata = 7;
+}
+
+message ProviderMetadata {
+  ProviderType provider_type = 1;
+  string provider_name = 2;
+  string model = 3;
+  string endpoint = 4;
+}
+
+message PrincipalContext {
+  string principal_id = 1;
+  string tenant_id = 2;
+  string project_id = 3;
+  repeated string roles = 4;
+  string environment = 5;
+}
+
+message GuardCheckResult {
+  string request_id = 1;
+  DecisionType decision = 2;
+  uint32 risk_score = 3;
+  repeated ViolationEvidence violations = 4;
+  RedactionResult redaction_result = 5;
+  string policy_revision = 6;
+  uint64 core_latency_ms = 7;
+}
+
+message ViolationEvidence {
+  string policy_id = 1;
+  ViolationType violation_type = 2;
+  Severity severity = 3;
+  string message = 4;
+  uint32 start_offset = 5;
+  uint32 end_offset = 6;
+  string detector = 7;
+}
+
+message RedactionResult {
+  bool redacted = 1;
+  string redacted_content = 2;
+  uint32 redaction_count = 3;
+  repeated RedactionSpan spans = 4;
+}
+
+message RedactionSpan {
+  uint32 start_offset = 1;
+  uint32 end_offset = 2;
+  string replacement = 3;
+  ViolationType violation_type = 4;
+}
+
+message CoreHealthCheckRequest {
+  string request_id = 1;
+}
+
+message CoreHealthCheckResult {
+  string request_id = 1;
+  bool ready = 2;
+  string core_version = 3;
+  string loaded_policy_revision = 4;
+  repeated string enabled_detectors = 5;
+}
